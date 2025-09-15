@@ -59,10 +59,10 @@ router.post('/update', async (req, res) => {
         let updates = {};
 
         if(body.user_id) {
-            updates.user_id = body.user_id; 
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, "Not Acceptable", "user_id cannot be changed!!!");
         }
         if(body.perfume_id) {
-            updates.perfume_id = body.perfume_id; 
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, "Not Acceptable", "perfume_id cannot be changed!!!");
         }
         if(body.content) {
             updates.content = body.content; 

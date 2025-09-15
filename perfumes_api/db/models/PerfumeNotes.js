@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
 const schema = mongoose.Schema({
-    perfume_id: {type: String, required: true},
-    note_id: {type: String, required: true},
-    noteType: {type: String, required: true}
+    perfume_id: {type: mongoose.Schema.Types.ObjectId, ref: "perfumes",required: true},
+    note_id: {type: mongoose.Schema.Types.ObjectId, ref:"notes", required: true},
+    note_type: {type: String, required: true, enum: ["TOP", "MIDDLE", "BASE"]}
 }, {
     versionKey: false,
     timestamps: {

@@ -3,8 +3,9 @@ const mongoose = require("mongoose");
 const schema = mongoose.Schema({
     name: {type: String, required: true},
     description: {type: String, required: true},
-    imageUrl: String,
-    concentration_id: {type: String, unique: true}
+    concentration_id: {type: mongoose.Schema.Types.ObjectId, ref:"concentrations", required: true},
+    brand: {type: String, required: true},
+    image_url: String
 }, {
     versionKey: false,
     timestamps: {
@@ -12,6 +13,8 @@ const schema = mongoose.Schema({
         updatedAt: "updated_at"
     }
 });
+
+schema.index({name: 1, concentration_id: 1}, {unique: true});
 
 class Perfumes extends mongoose.Model{
 

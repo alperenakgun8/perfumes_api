@@ -20,6 +20,23 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('./:id', async (req, res) => {
+  try{
+    const userId = req.params.id;
+    let user = await Users.findOne({_id: userId});
+
+    if(!user) {
+      return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "User not found"}));
+    }
+
+    res.json(Response.successResponse(user));
+    
+  } catch(err) {
+        let errorResponse = Response.errorResponse(err);
+        res.status(errorResponse.code).json(errorResponse);
+  }
+});
+
 router.post('/add', async (req, res) => {
     let body = req.body;
     try{
@@ -118,14 +135,10 @@ router.post('/update', async (req, res) => {
     }
 });
 
-router.post('/delete', async (req, res) => {
-    let body = req.body;
+router.delete('/:id', async (req, res) => {
     try{
-        if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
-        }
-
-        const deleted = await Users.deleteOne({_id: body._id});
+        const userId = req.params.id; 
+        const deleted = await Users.deleteOne({_id: userId});
 
         if(deleted.deletedCount === 0) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "User not found or already deleted");
@@ -181,14 +194,10 @@ router.post('/favorites/add', async (req, res) => {
   }
 });
 
-router.post('/favorites/delete', async (req, res) => {
-  let body = req.body;
+router.delete('/favorites/:id', async (req, res) => {
   try {
-    if(!body._id) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
-    }
-
-    const deleted = await UserFavorites.deleteOne({_id: body._id});
+    const favoriteId = req.params.id;
+    const deleted = await UserFavorites.deleteOne({_id: favoriteId});
 
     if(deleted.deletedCount === 0) {
       throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "favorite parfum not found or already deleted");
@@ -200,6 +209,6 @@ router.post('/favorites/delete', async (req, res) => {
     let errorResponse = Response.errorResponse(err);
     res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
   }
-})
+});
 
 module.exports = router;

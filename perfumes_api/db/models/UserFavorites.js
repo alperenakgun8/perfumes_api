@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
 const schema = mongoose.Schema({
-    user_id: {type: String, required: true},
-    perfume_id: {type: String, required: true}
+    user_id: {type: mongoose.Schema.Types.ObjectId, ref:"users", required: true},
+    perfume_id: {type: mongoose.Schema.Types.ObjectId, ref:"perfumes", required: true}
 }, {
     versionKey: false,
     timestamps: {
