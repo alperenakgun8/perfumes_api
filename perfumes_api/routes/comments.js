@@ -16,6 +16,38 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/:user_id', async (req, res) => {
+    try{
+        const userId = req.params.user_id;
+        let comments = await Comments.find({user_id: userId});
+
+        if(!comments) {
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "User comment not found"}));
+        }
+
+        res.json(Response.successResponse(comments));
+    } catch(err) {
+        let errorResponse = Response.errorResponse(err);
+        res.status(errorResponse.code).json(errorResponse);
+    }
+});
+
+router.get('/:perfume_id', async (req, res) => {
+    try{
+        const perfume_id = req.params.user_id;
+        let comments = await Comments.find({perfume_id: perfume_id});
+
+        if(!comments) {
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "Perfume comments not found"}));
+        }
+
+        res.json(Response.successResponse(comments));
+    } catch(err) {
+        let errorResponse = Response.errorResponse(err);
+        res.status(errorResponse.code).json(errorResponse);
+    }
+});
+
 router.post('/add', async (req, res) => {
     let body = req.body;
     try{
@@ -88,14 +120,10 @@ router.post('/update', async (req, res) => {
     }
 });
 
-router.post('/delete', async (req, res) => {
-    let body = req.body;
+router.delete('/:id', async (req, res) => {
     try{
-        if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
-        }
-
-        const deleted = await Comments.deleteOne({_id: body._id});
+        let commentId = req.params.id;
+        const deleted = await Comments.deleteOne({_id: commentId});
 
         if(deleted.deletedCount === 0) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Comment not found or already deleted");

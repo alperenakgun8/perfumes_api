@@ -80,19 +80,14 @@ router.post('/update', async(req,res) => {
     }
 });
 
-router.post('/delete', async (req,res) => {
-    let body = req.body;
+router.delete('/:id', async (req,res) => {
     try{
-        if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
-        }
-
-        const deleted = await Concentrations.deleteOne({_id: body._id});
+        concentrationId = req.params.id;
+        const deleted = await Concentrations.deleteOne({_id: concentrationId});
 
         if(deleted.deletedCount === 0) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Concentration not found or already deleted");
         }
-
         res.json(Response.successResponse({ success: true }));
 
     } catch (err) {

@@ -170,21 +170,16 @@ router.post('/update', async (req, res) => {
     }
 });
 
-router.post('/delete', async (req, res) => {
-    let body = req.body;
+router.delete('/:id', async (req, res) => {
     try{
-        if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
-        }
-
-        let deletedPerfumeNotes = await PerfumeNotes.deleteMany({perfume_id: body._id});
-        console.log(deletedPerfumeNotes.deletedCount);
-
-        let deleted = await Perfumes.deleteOne({_id: body._id});
+        const parfumeId = req.params.id;
+        let deleted = await Perfumes.deleteOne({_id: perfumeId});
 
         if(deleted.deletedCount === 0) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "perfume not found or already deleted");
         }
+
+        await PerfumeNotes.deleteMany({perfume_id: perfumeId});
 
         res.json(Response.successResponse({success: true}));
 
