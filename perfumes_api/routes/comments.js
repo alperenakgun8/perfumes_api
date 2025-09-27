@@ -63,12 +63,16 @@ router.post('/add', async (req, res) => {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "content field must be filled");
         }
 
+        if(!body.rating) {
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "rating field must be filled");
+        }
+
         let comment = new Comments({
             user_id: body.user_id,
             perfume_id: body.perfume_id,
             content: body.content,
-            parent_comment_id: body.parent_comment_id || null,
-            rating: body.rating || null
+            rating: body.rating,
+            parent_comment_id: body.parent_comment_id || null
         });
 
         await comment.save();
@@ -99,11 +103,11 @@ router.post('/update', async (req, res) => {
         if(body.content) {
             updates.content = body.content; 
         }
+        if(body.rating) {
+            updates.rating = body.rating; 
+        }
         if(body.hasOwnProperty("parent_comment_id")) {
             updates.parent_comment_id = body.parent_comment_id; 
-        }
-        if(body.hasOwnProperty("rating")) {
-            updates.rating = body.rating; 
         }
 
         const updated = await Comments.updateOne({_id: body._id}, updates);

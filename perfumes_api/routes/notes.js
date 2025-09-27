@@ -40,7 +40,7 @@ router.post('/add', async (req, res) => {
 
         await note.save();
 
-        res.json(Response.successResponse({success: true}));
+        res.json(Response.successResponse({success: true, data: note}));
 
     } catch (err) {
         let errorResponse = Response.errorResponse(err);
@@ -70,9 +70,9 @@ router.post('/update', async (req, res) => {
             updates.image_url = body.image_url; 
         }
 
-        await Notes.updateOne({_id: body._id}, updates);
+        const updated = await Notes.findByIdAndUpdate(body._id, updates, {new: true});
 
-        res.json(Response.successResponse({success: true}));
+        res.json(Response.successResponse({success: true, data: updated}));
 
     } catch (err) {
         let errorResponse = Response.errorResponse(err);

@@ -40,7 +40,8 @@ router.post('/add', async (req, res) => {
 
         await concentration.save();
 
-        res.json(Response.successResponse({success: true}));
+        res.json(Response.successResponse({success: true, data: concentration
+        }));
 
     } catch(err) {
         let errorResponse = Response.errorResponse(err);
@@ -70,9 +71,13 @@ router.post('/update', async(req,res) => {
             updates.display_name = body.display_name;
         }
 
-        await Concentrations.updateOne({_id: body._id}, updates);
+        const updated = await Concentrations.findByIdAndUpdate(body._id, updates, {new: true});
 
-        res.json(Response.successResponse({ success: true }));
+         if (!updated) {
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.VALIDATION_ERROR, "Concentration not found");
+        }
+
+        res.json(Response.successResponse({ success: true, data: updated }));
 
     } catch (err) {
         let errorResponse = Response.errorResponse(err);
@@ -82,7 +87,7 @@ router.post('/update', async(req,res) => {
 
 router.delete('/:id', async (req,res) => {
     try{
-        concentrationId = req.params.id;
+        const concentrationId = req.params.id.trim();
         const deleted = await Concentrations.deleteOne({_id: concentrationId});
 
         if(deleted.deletedCount === 0) {

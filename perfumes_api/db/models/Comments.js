@@ -4,8 +4,8 @@ const schema = mongoose.Schema({
     user_id: {type: mongoose.Schema.Types.ObjectId, ref: "users", required: true},
     perfume_id: {type: mongoose.Schema.Types.ObjectId, ref: "perfumes", required: true},
     content: {type: String, required: true},
-    parent_comment_id: String,
-    rating: Number,
+    rating: {type: Number, required: true, min: [0, 'rating must between 0 and 5'], max: [5, 'rating must between 0 and 5'], validate:{validator: Number.isInteger, message: 'rating must be an integer'}},
+    parent_comment_id: String
 }, {
     versionKey: false,
     timestamps: {

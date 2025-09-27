@@ -5,6 +5,9 @@ const schema = mongoose.Schema({
     password: {type: String, required: true},
     first_name: {type: String, required: true},
     last_name: {type: String, required: true},
+    nickname: {type: String, required: true},
+    role: {type: String, enum: ["Super Admin" ,"Admin", "User"], default: "User", required: true},
+    profile_picture: { type: String , default: ""}
 }, {
     versionKey: false,
     timestamps: {
