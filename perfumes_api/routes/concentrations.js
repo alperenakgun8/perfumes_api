@@ -1,5 +1,5 @@
-var express = require('express');
-var router = express.Router();
+const express = require('express');
+const router = express.Router();
 
 const Concentrations = require('../db/models/Concentrations');
 const AuditLogs = require('../lib/AuditLogs');
@@ -8,6 +8,9 @@ const Response = require('../lib/Response');
 const Enum = require("../config/enum");
 const logger = require("../lib/logger/LoggerClass");
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.get('/', async (req,res) => {
     try{
@@ -27,22 +30,23 @@ router.post('/add', auth.checkRoles("concentration_add"), async (req, res) => {
     let body = req.body;
     try{
         if(!body.name || body.name.length === 0) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "name field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["name"]));
         }
 
         let finded = await Concentrations.find({name: body.name});
 
         if(finded.length > 0) {
-            throw new CustomError(Enum.HTTP_CODES.CONFLICT, Enum.VALIDATION_ERROR, "Concentration has already added");
+            throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.ALREADY_EXIST", req.user.language, [""]), i18n.translate("COMMON.ALREADY_EXIST", req.user.language, ["Concentration"]));
         }
 
         if(!body.display_name || body.display_name.length == 0) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "display_name field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language, [""]), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["display_name"]));
         }
 
         let concentration = new Concentrations({
             name: body.name,
-            display_name: body.display_name
+            display_name: body.display_name,
+            created_by: req.user._id
         });
 
         await concentration.save();
@@ -64,7 +68,7 @@ router.post('/update',  auth.checkRoles("concentration_update"), async(req,res) 
     let body = req.body;
     try{
         if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
 
         let updates = {};
@@ -72,7 +76,7 @@ router.post('/update',  auth.checkRoles("concentration_update"), async(req,res) 
         if(body.name) {
             let finded = await Concentrations.find({name: body.name});
             if(finded.length > 0) {
-                throw new CustomError(Enum.HTTP_CODES.CONFLICT, Enum.VALIDATION_ERROR, "Concentration already added");
+                throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.ALREADY_EXIST", req.user.language, [""]), i18n.translate("COMMON.ALREADY_EXIST", req.user.language, ["Concentration"]));
             } else {
                 updates.name = body.name;
             }
@@ -85,7 +89,7 @@ router.post('/update',  auth.checkRoles("concentration_update"), async(req,res) 
         const updated = await Concentrations.findByIdAndUpdate(body._id, updates, {new: true});
 
          if (!updated) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.VALIDATION_ERROR, "Concentration not found");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Concentration"]));
         }
 
         AuditLogs.info(req.user?.email, "Concentrations", "Update", updated);
@@ -106,7 +110,7 @@ router.delete('/:id',  auth.checkRoles("concentration_delete"), async (req,res) 
         const deleted = await Concentrations.deleteOne({_id: concentrationId});
 
         if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Concentration not found or already deleted");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Concentration"]));
         }
 
         AuditLogs.info(req.user?.email, "Concentrations", "Delete", deleted);

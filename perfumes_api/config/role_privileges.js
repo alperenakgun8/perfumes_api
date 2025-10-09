@@ -56,6 +56,12 @@ module.exports = {
             description: "User Login"
         },
         {
+            key: "user_update",
+            name: "User Update",
+            group: "USERS",
+            description: "User update"
+        },
+        {
             key: "user_auth",
             name: "User Auth",
             group: "USERS",

@@ -8,14 +8,18 @@ const Response = require('../lib/Response');
 const Enum = require('../config/enum');
 const logger = require("../lib/logger/LoggerClass");
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.get('/perfume/:id', async (req, res) => {
     try{
         const perfume_id = req.params.id;
         let comments = await Comments.find({perfume_id: perfume_id}).populate("user_id");
+        const lang = req.user?.language || config.DEFAULT_LANG;
 
-        if(!comments) {
-            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "Perfume comments not found"}));
+        if(comments.length === 0) {
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", lang, ["perfume_comments"])}, lang));
         }
 
         res.json(Response.successResponse(comments));
@@ -39,13 +43,12 @@ router.get('/', auth.checkRoles("comment_view"),async (req, res) => {
     }
 });
 
-router.get('user/:id', auth.checkRoles("comment_view_user"),async (req, res) => {
+router.get('/user', auth.checkRoles("comment_view_user"), async (req, res) => {
     try{
-        const userId = req.params.id;
-        let comments = await Comments.find({user_id: userId}).populate("user_id");
+        let comments = await Comments.find({user_id: req.user._id}).populate("user_id");
 
-        if(!comments) {
-            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "User comment not found"}));
+        if(comments.length === 0) {
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["user_comments"])}, req.user.language));
         }
 
         res.json(Response.successResponse(comments));
@@ -58,24 +61,20 @@ router.get('user/:id', auth.checkRoles("comment_view_user"),async (req, res) => 
 router.post('/add', auth.checkRoles("comment_add"), async (req, res) => {
     let body = req.body;
     try{
-        if(!body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "user_id field must be filled");
-        }
-
         if(!body.perfume_id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "perfume_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["perfume_id"]));
         }
 
         if(!body.content || body.content.length === 0) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "content field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["content"]));
         }
 
         if(!body.rating) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "rating field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["rating"]));
         }
 
         let comment = new Comments({
-            user_id: body.user_id,
+            user_id: req.user._id,
             perfume_id: body.perfume_id,
             content: body.content,
             rating: body.rating,
@@ -101,16 +100,16 @@ router.post('/update', auth.checkRoles("comment_update"),async (req, res) => {
     let body = req.body;
     try{
         if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filed");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
 
         let updates = {};
 
         if(body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, "Not Acceptable", "user_id cannot be changed!!!");
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["user_id"]));
         }
         if(body.perfume_id) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, "Not Acceptable", "perfume_id cannot be changed!!!");
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["perfume_id"]));
         }
         if(body.content) {
             updates.content = body.content; 
@@ -122,7 +121,7 @@ router.post('/update', auth.checkRoles("comment_update"),async (req, res) => {
         const updated = await Comments.updateOne({_id: body._id}, updates);
 
         if(updated.matchedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Comment not found");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["comment"]));
         }
 
         AuditLogs.info(req.user?.email, "Comments", "Update", updated);
@@ -145,7 +144,7 @@ router.delete('/:id', auth.checkRoles("comment_delete"),async (req, res) => {
         const deleted = await Comments.deleteOne({_id: commentId});
 
         if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Comment not found or already deleted");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["comment"]));
         }
 
         AuditLogs.info(req.user?.email, "Comments", "Delete", deleted);

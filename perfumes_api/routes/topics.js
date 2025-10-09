@@ -8,6 +8,9 @@ const Response = require('../lib/Response');
 const Enum = require('../config/enum');
 const logger = require("../lib/logger/LoggerClass");
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.get("/", async (req, res) => {
     try {
@@ -24,7 +27,7 @@ router.get("/:id", async (req, res) => {
         const id = req.params.id
         let topic = await Topics.findOne({_id: id}).populate("user_id");
         if(!topic) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Topic not found.");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Topic"]));
         }
         res.json(Response.successResponse(topic));
     } catch (err) {
@@ -41,13 +44,13 @@ router.post("/add", auth.checkRoles("topic_add"), async(req, res) => {
     let body = req.body;
     try {
         if(!body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "user_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["user_id"]));
         }
         if(!body.title) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "title field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["title_id"]));
         }
         if(!body.content) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "content field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["content"]));
         }
 
         let topic = new Topics({
@@ -75,13 +78,13 @@ router.post("/update", auth.checkRoles("topic_update"), async(req, res) => {
     let body = req.body;
     try {
         if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
 
         let updates = {};
 
         if(body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, "Not Acceptable", "user_id cannot be changed");
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["user_id"]));
         }
         if(body.title) {
             updates.title = body.title;
@@ -93,7 +96,7 @@ router.post("/update", auth.checkRoles("topic_update"), async(req, res) => {
        const updated = await Topics.updateOne({_id: body._id}, updates);
 
        if(updated.matchedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Topic not found");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Topic"]));
         }
         
         const updatedTopic = await Topics.findByIdAndUpdate(body._id, updates, {new: true}).populate("user_id");
@@ -115,7 +118,7 @@ router.delete('/:id', auth.checkRoles("topic_delete"), async (req, res) => {
         const deleted = await Topics.deleteOne({_id: topicId});
 
         if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Topic not found or already deleted");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Topic"]));
         }
 
         AuditLogs.info(req.user?.email, "Topics", "Update", deleted);

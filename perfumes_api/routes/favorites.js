@@ -8,6 +8,9 @@ const Response = require('../lib/Response');
 const Enum = require('../config/enum');
 const logger = require("../lib/logger/LoggerClass");
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.all("*", auth.authenticate(), (req, res, next) => {
     next();
@@ -32,17 +35,17 @@ router.post('/add', auth.checkRoles("favorite_add"),async (req, res) => {
   let body = req.body;
   try{
     if(!body.user_id) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "user_id field must be filled");
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["user_id"]));
     }
 
     if(!body.perfume_id) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "perfume_id field must be filled");
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["perfume_id"]));
     }
 
     let finded = await UserFavorites.findOne({user_id: body.user_id, perfume_id: body.perfume_id});
     
     if(finded) {
-      throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, Enum.NOT_ACCEPTABLE_TEXT, "Perfume already added to user favorites");
+      throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.ALREADY_EXIST", req.user.language, ["Perfume"]));
     }
 
     let favorite = new UserFavorites({
@@ -72,7 +75,7 @@ router.post('/delete', auth.checkRoles("favorite_delete"), async (req, res) => {
     const deleted = await UserFavorites.deleteOne({user_id: user_id, perfume_id: perfume_id});
 
     if(deleted.deletedCount === 0) {
-      throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "favorite parfum not found or already deleted");
+      throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Favorite"]));
     }
 
     AuditLogs.info(req.user?.email, "Users", "DeleteFavorite", deleted);

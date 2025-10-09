@@ -14,6 +14,10 @@ const logger = require("../lib/logger/LoggerClass");
 const role_privileges = require("../config/role_privileges"); 
 
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const UserRoles = require('../db/models/UserRoles');
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.all("*", auth.authenticate(), (req, res, next) => {
     next();
@@ -21,7 +25,13 @@ router.all("*", auth.authenticate(), (req, res, next) => {
 
 router.get("/", auth.checkRoles("role_view"), async (req, res) => {
     try {
-        const roles = await Roles.find({});
+        const roles = await Roles.find({}).lean();
+
+        for (let i = 0; i < roles.length; i++) {
+            let permissions = await RolePrivileges.find({role_id: roles[i]._id});
+            roles[i].permissions = permissions;
+        }
+
         res.json(Response.successResponse(roles));
     } catch (err) {
         let errorResponse = Response.errorResponse(err);
@@ -34,11 +44,11 @@ router.post("/add", auth.checkRoles("role_add"), async (req, res) => {
         let body = req.body;
 
         if(!body.role_name) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "role_name field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["role_name"]));
         }
 
         if(!body.permissions || !Array.isArray(body.permissions) || body.permissions.length === 0) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "permissions field must be an array");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["permissions"]));
         }
 
         let newRole = new Roles({
@@ -50,7 +60,7 @@ router.post("/add", auth.checkRoles("role_add"), async (req, res) => {
 
         for(let i = 0; i<body.permissions.length; i++) {
             let priv = new RolePrivileges({
-                role_id: role_id,
+                role_id: role._id,
                 permission: body.permissions[i]
             });
 
@@ -74,13 +84,19 @@ router.post("/update", auth.checkRoles("role_update"), async (req, res) => {
         let body = req.body;
 
         if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
+        }
+
+        let userRole = await UserRoles.findOne({user_id: req.user._id, role_id: body._id});
+
+        if(userRole) {
+            throw new CustomError(Enum.HTTP_CODES.FORBIDDEN, i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language), i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language, ["_id"]));
         }
 
         let updates = {}
 
         if(body.created_by) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, Enum.NOT_ACCEPTABLE_TEXT, "created_by field cannot changed");
+            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE,i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["created_by"]));
         }
 
         if(body.role_name) {
@@ -114,7 +130,7 @@ router.post("/update", auth.checkRoles("role_update"), async (req, res) => {
         const updated = await Roles.findByIdAndUpdate(body._id, updates, {new: true});
 
         if (!updated) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.VALIDATION_ERROR, "Role not found");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Role"]));
         }
 
         AuditLogs.info(req.user?.email, "Roles", "Update", updated);
@@ -135,7 +151,7 @@ router.delete(`/:id`, auth.checkRoles("role_delete"), async (req, res) => {
         const deleted = await Roles.deleteOne({_id: roleId});
 
         if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "Role not found or already deleted");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Role"]));
         }
 
         await RolePrivileges.deleteMany({role_id: roleId});

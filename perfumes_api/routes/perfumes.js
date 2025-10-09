@@ -1,5 +1,5 @@
-var express = require('express');
-var router = express.Router();
+const express = require('express');
+const router = express.Router();
 
 const AuditLogs = require('../lib/AuditLogs');
 const Perfumes = require('../db/models/Perfumes');
@@ -10,6 +10,9 @@ const PerfumeNotes = require('../db/models/PerfumeNotes');
 const mongoose = require("mongoose");
 const logger = require("../lib/logger/LoggerClass");
 const auth = require("../lib/auth")();
+const config = require('../config');
+const I18n = require("../lib/i18n");
+const i18n = new I18n(config.DEFAULT_LANG);
 
 router.get('/', async (req, res) => {
     try{
@@ -20,7 +23,6 @@ router.get('/', async (req, res) => {
         res.status(errorResponse.code).json(errorResponse);
     }
 });
-
 
 router.get('/brands', async (req,res) => {
     try{
@@ -48,13 +50,13 @@ router.get('/detail/:id', async (req, res) => {
         const perfumeId = req.params.id;
 
         if(!mongoose.Types.ObjectId.isValid(perfumeId)) {
-            return res.status(Enum.HTTP_CODES.BAD_REQUEST).json(Response.errorResponse({code: Enum.HTTP_CODES.BAD_REQUEST, message: "Invalide perfume id"}));
+            return res.status(Enum.HTTP_CODES.BAD_REQUEST).json(Response.errorResponse({code: Enum.HTTP_CODES.BAD_REQUEST, message: i18n.translate("COMMON.INVALID", req.user.language, ["perfume_id"])}));
         }
 
         let perfume = await Perfumes.findById(perfumeId).populate('concentration_id', 'name display_name');
 
         if(!perfume) {
-            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: "perfume not found"}));
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Perfume"])}));
         }
 
         let notes = await PerfumeNotes.find({perfume_id: perfumeId}).populate('note_id', 'name image_url').select('note_type note_id');
@@ -80,7 +82,7 @@ router.post('/filter_by_notes', async (req, res) => {
     const { noteIds } = req.body;
 
     if (!noteIds || !Array.isArray(noteIds) || noteIds.length === 0) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR,"noteIds must be a non-empty array");
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["noteIds"]));
     }
 
     const objectIds = noteIds.map(id => new mongoose.Types.ObjectId(id));
@@ -124,7 +126,6 @@ router.post('/filter_by_notes', async (req, res) => {
 
     res.json(Response.successResponse(perfumes));
   } catch (err) {
-    console.error("Aggregation error:", err);
     const errorResponse = Response.errorResponse(err);
     res.status(errorResponse.code).json(errorResponse);
   }
@@ -166,28 +167,28 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
     let body = req.body;
     try{
         if(!body.name) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.BAD_REQUEST, "name field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["name"]));
         }
         if(!body.description) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.BAD_REQUEST, "description field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["description"]));
         }
         if(!body.concentration_id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.BAD_REQUEST, "concentration_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["concentration_id"]));
         }
         if(!body.brand){
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.BAD_REQUEST, "brand field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["brand"]));
         }
         if(!body.gender) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "gender field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["gender"]));
         }
         if(!body.image_url) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.BAD_REQUEST, "image_url field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["image_url"]));
         }
         if(!body.notes) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "notes field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes"]));
         }
         if(!Array.isArray(body.notes) || body.notes.length === 0) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "notes must be a non-empty array");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["notes"]));
         }
 
         let perfume = new Perfumes({
@@ -196,20 +197,21 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
             image_url: body.image_url || "",
             concentration_id: body.concentration_id,
             brand: body.brand,
-            gender: body.gender
+            gender: body.gender,
+            created_by: req.user?._id
         });
 
         await perfume.save();
 
         for(const note of body.notes) {
             if(!note.note_id) {
-                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "each note must have _id");
+                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> _id"]));
             }
             if(!note.note_type) {
-                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "each note must have note_type");
+                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type"]));
             }
             if(note.note_type !== "TOP" && note.note_type !== "MIDDLE" && note.note_type !== "BASE") {
-                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "note_type must be 'TOP', 'MIDDLE' or 'BASE'");
+                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type 'TOP' | 'MIDDLE' 'BASE'"]));
             }
             let perfumeNotes = new PerfumeNotes({
             perfume_id: perfume._id,
@@ -235,30 +237,30 @@ router.post('/update', auth.checkRoles("perfume_update"), async (req, res) => {
     let body = req.body;
     try {
         if(!body._id){
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "_id field must be filled");
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
 
         if(body.name && body.concentration_id) {
             let finded = await Perfumes.findOne({name: body.name, concentration_id: body.concentration_id});
             if(finded) {
-                throw new CustomError(Enum.HTTP_CODES.CONFLICT, "Conflict Error", "perfume already added");
+                throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.ALREADY_EXIST", req.user.language, [""]), i18n.translate("COMMON.ALREADY_EXIST", req.user.language, ["Perfume"]));
             }
         }
 
         if(body.notes) {
             if(!Array.isArray(body.notes) || body.notes.length === 0) {
-                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "notes must be a non-empty array");
+                throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["notes"]));
             } else {
                 await PerfumeNotes.deleteMany({perfume_id: body._id});
                 for(const note of body.notes) {
                     if(!note.note_id) {
-                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "each note must have _id");
+                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> _id"]));
                     }
                     if(!note.note_type) {
-                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "each note must have note_type");
+                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type"]));
                     }
                     if(note.note_type !== "TOP" && note.note_type !== "MIDDLE" && note.note_type !== "BASE") {
-                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "note_type must be 'TOP', 'MIDDLE' or 'BASE'");
+                        throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type 'TOP' | 'MIDDLE' 'BASE'"]));
                     }
                     let perfumeNotes = new PerfumeNotes({
                         perfume_id: body._id,
@@ -270,7 +272,7 @@ router.post('/update', auth.checkRoles("perfume_update"), async (req, res) => {
             }
         }
 
-         let updatesPerfume = {};
+        let updatesPerfume = {};
 
         if(body.name) {
             updatesPerfume.name = body.name;
@@ -299,7 +301,7 @@ router.post('/update', auth.checkRoles("perfume_update"), async (req, res) => {
         const updated = await Perfumes.findByIdAndUpdate(body._id, updatesPerfume, {new: true});
 
         if (!updated) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.VALIDATION_ERROR, "Parfume not found");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Perfume"]));
         }
 
         AuditLogs.info(req.user?.email, "Perfumes", "Update", updated);
@@ -320,7 +322,7 @@ router.delete('/:id', auth.checkRoles("perfume_delete"), async (req, res) => {
         const deleted = await Perfumes.deleteOne({_id: perfumeId});
 
         if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, Enum.NOT_FOUND, "perfume not found or already deleted");
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Perfume"]));
         }
 
         await PerfumeNotes.deleteMany({perfume_id: perfumeId});

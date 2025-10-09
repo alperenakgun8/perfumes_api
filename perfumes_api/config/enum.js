@@ -20,12 +20,9 @@ module.exports = {
         BAD_GATEWAY: 502
     },
 
-    VALIDATION_ERROR: "Validation Error",
-    NOT_ACCEPTABLE_TEXT: "Not Acceptable",
-    NOT_FOUND: "Not Found",
     MIN_PASSWORD_LENGTH: 8,
     MAX_PASSWORD_LENGTH: 16,
-
+    
     LOG_LEVELS: {
         "INFO": "INFO",
         "WARN": "WARN",
