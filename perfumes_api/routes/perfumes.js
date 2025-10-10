@@ -3,6 +3,12 @@ const router = express.Router();
 
 const AuditLogs = require('../lib/AuditLogs');
 const Perfumes = require('../db/models/Perfumes');
+const emitter = require("../lib/Emitter");
+
+const ExcelExport = require("../lib/Export");
+const fs = require("fs");
+const path = require("path");
+
 const CustomError = require('../lib/Error');
 const Response = require('../lib/Response');
 const Enum = require('../config/enum');
@@ -79,13 +85,14 @@ router.get('/detail/:id', async (req, res) => {
 
 router.post('/filter_by_notes', async (req, res) => {
   try {
+
     const { noteIds } = req.body;
 
     if (!noteIds || !Array.isArray(noteIds) || noteIds.length === 0) {
       throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["noteIds"]));
     }
 
-    const objectIds = noteIds.map(id => new mongoose.Types.ObjectId(id));
+    const objectIds = noteIds.map(id => mongoose.Types.ObjectId(id));
 
     const perfumes = await PerfumeNotes.aggregate([
       {
@@ -106,7 +113,7 @@ router.post('/filter_by_notes', async (req, res) => {
       },
       {
         $lookup: {
-          from: "perfumes", // 👈 Burada kesin string yazıyoruz
+          from: "perfumes",
           localField: "_id",
           foreignField: "_id",
           as: "perfume"
@@ -155,7 +162,7 @@ router.post('/filter', async(req, res) => {
 
     } catch (err) {
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
@@ -164,8 +171,11 @@ router.all("*", auth.authenticate(), (req, res, next) => {
 });
 
 router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
-    let body = req.body;
+
     try{
+
+        let body = req.body;
+
         if(!body.name) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["name"]));
         }
@@ -180,6 +190,9 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
         }
         if(!body.gender) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["gender"]));
+        }
+        if(body.gender !== "F" || body.gender !== "M" || body.gender !== "U") {
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE", req.user.language, ["gender", "F | M | U"]));
         }
         if(!body.image_url) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["image_url"]));
@@ -198,19 +211,22 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
             concentration_id: body.concentration_id,
             brand: body.brand,
             gender: body.gender,
-            created_by: req.user?._id
+            created_by: req.user._id
         });
 
         await perfume.save();
 
         for(const note of body.notes) {
             if(!note.note_id) {
+                await Perfumes.deleteOne({_id: perfume._id});
                 throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> _id"]));
             }
             if(!note.note_type) {
+                await Perfumes.deleteOne({_id: perfume._id});
                 throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type"]));
             }
             if(note.note_type !== "TOP" && note.note_type !== "MIDDLE" && note.note_type !== "BASE") {
+                await Perfumes.deleteOne({_id: perfume._id});
                 throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["notes -> note_type 'TOP' | 'MIDDLE' 'BASE'"]));
             }
             let perfumeNotes = new PerfumeNotes({
@@ -221,23 +237,33 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
             await perfumeNotes.save();
         }
 
-        AuditLogs.info(req.user?.email, "Perfumes", "Add", perfume);
-        logger.info(req.user?.email, "Perfumes", "Add", perfume);
+        AuditLogs.info(req.user.email, "Perfumes", "Add", perfume);
+        logger.info(req.user.email, "Perfumes", "Add", perfume);
+        emitter.getEmitter("notifications").emit("messages", {message: "perfume added."});
 
         res.json(Response.successResponse({success: true, data: perfume}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Perfumes", "Add", err);
+        logger.error(req.user.email, "Perfumes", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post('/update', auth.checkRoles("perfume_update"), async (req, res) => {
-    let body = req.body;
+
     try {
+
+        let body = req.body;
+
         if(!body._id){
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
+        }
+
+        const before = await Perfumes.findById(body._id);
+
+        if (!before) {
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Perfume"]));
         }
 
         if(body.name && body.concentration_id) {
@@ -300,42 +326,82 @@ router.post('/update', auth.checkRoles("perfume_update"), async (req, res) => {
         
         const updated = await Perfumes.findByIdAndUpdate(body._id, updatesPerfume, {new: true});
 
-        if (!updated) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Perfume"]));
-        }
-
-        AuditLogs.info(req.user?.email, "Perfumes", "Update", updated);
-        logger.info(req.user?.email, "Perfumes", "Update", updated);
+        AuditLogs.info(req.user.email, "Perfumes", "Update", {before: before, after: updated});
+        logger.info(req.user.email, "Perfumes", "Update", {before: before, after: updated});
+        emitter.getEmitter("notifications").emit("messages", {message: "perfume updated."});
 
         res.json(Response.successResponse({success: true, data: updated}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Perfumes", "Update", err);
+        logger.error(req.user.email, "Perfumes", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.delete('/:id', auth.checkRoles("perfume_delete"), async (req, res) => {
     try{
         const perfumeId = req.params.id;
-        const deleted = await Perfumes.deleteOne({_id: perfumeId});
 
-        if(deleted.deletedCount === 0) {
+        const perfume = await Perfumes.findById(perfumeId);
+
+        if(!perfume) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Perfume"]));
         }
 
         await PerfumeNotes.deleteMany({perfume_id: perfumeId});
 
-        AuditLogs.info(req.user?.email, "Perfumes", "Delete", deleted);
-        logger.error(req.user?.email, "Perfumes", "Delete", deleted);
+        await Perfumes.deleteOne({_id: perfumeId});
+
+        AuditLogs.info(req.user.email, "Perfumes", "Delete", perfume);
+        logger.error(req.user.email, "Perfumes", "Delete", perfume);
+        emitter.getEmitter("notifications").emit("messages", {message: "perfume deleted."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Perfumes", "Delete", err);
+        logger.error(req.user.email, "Perfumes", "Delete", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+    }
+});
+
+router.get("/export", auth.checkRoles("perfume_export"), async (req, res) => {
+    try{
+        let perfumes = await Perfumes.find({}).populate("created_by", "email").populate("concentration_id", "name");
+
+        const formattedData = perfumes.map(p => ({
+            brand: p.brand,
+            name: p.name,
+            description: p.description,
+            concentration: p.concentration_id ? p.concentration_id.name : "N/A",
+            gender: p.gender,
+            created_by: p.created_by ? p.created_by.email : "N/A",
+            created_at: p.created_at,
+            image_url: p.image_url
+        }));
+
+        let excelTable = ExcelExport.toExcel(
+        ["BRAND", "NAME", "DESCRIPTION", "CONCENTRATION", "GENDER", "CREATED_BY", "CREATED_AT", "IMAGE_URL"],
+        ["brand", "name", "description", "concentration", "gender", "created_by", "created_at", "image_url"],
+        formattedData
+        );
+
+        let filePath = path.join(__dirname, "../tmp", `perfumes_excel_${Date.now()}.xlsx`);
+        
+        fs.writeFileSync(filePath, excelTable, "UTF-8");
+        res.download(filePath, () => {
+            fs.unlinkSync(filePath);
+        });
+
+        AuditLogs.info(req.user.email, "Perfumes", "Export Excel", "exported");
+        logger.info(req.user.email, "Perfumes", "Export Excel", "exported");
+        emitter.getEmitter("notifications").emit("messages", {message: "perfume exported."});
+
+    } catch (err) {
+        logger.error(req.user.email, "Perfumes", "Export Excel", err);
+        let errorResponse = Response.errorResponse(err);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 

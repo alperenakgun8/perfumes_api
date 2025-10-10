@@ -12,6 +12,7 @@ module.exports = {
         "INVALID": "Invalid {}",
         "MUST_BE_NON_EMPTY_ARRAY": "{} must be a non-empty array",
         "BAD_REQUEST": "Bad Request",
+        "FIELD_MUST_BE": "{} must be {}"
     }, 
 
     "USER": {

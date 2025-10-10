@@ -50,28 +50,10 @@ module.exports = {
             description: "View all user"
         },
         {
-            key: "user_login",
-            name: "User Login",
-            group: "USERS",
-            description: "User Login"
-        },
-        {
             key: "user_update",
             name: "User Update",
             group: "USERS",
             description: "User update"
-        },
-        {
-            key: "user_auth",
-            name: "User Auth",
-            group: "USERS",
-            description: "User Auth"
-        },
-        {
-            key: "user_add",
-            name: "User Add",
-            group: "USERS",
-            description: "User Add"
         },
         {
             key: "user_get",
@@ -96,6 +78,12 @@ module.exports = {
             name: "User Delete",
             group: "USERS",
             description: "User Delete"
+        },
+        {
+            key: "user_export",
+            name: "User Export",
+            group: "USERS",
+            description: "User export"
         },
         {
             key: "role_view",
@@ -134,12 +122,6 @@ module.exports = {
             description: "Comment view"
         },
         {
-            key: "comment_view_perfume",
-            name: "Comment View Perfume",
-            group: "COMMENTS",
-            description: "Perfume comments"
-        },
-        {
             key: "comment_view_user",
             name: "Comment View User",
             group: "COMMENTS",
@@ -170,12 +152,6 @@ module.exports = {
             description: "Comment of topic view"
         },
         {
-            key: "comment_of_topic_view_topic",
-            name: "Comment of Topic View Topic",
-            group: "COMMENTS_OF_TOPICS",
-            description: "Topic comments"
-        },
-        {
             key: "comment_of_topic_view_user",
             name: "Comment of Topic View User",
             group: "COMMENTS_OF_TOPICS",
@@ -200,12 +176,6 @@ module.exports = {
             description: "Comment of topics delete"
         },
         {
-            key: "concentration_view",
-            name: "Concentration View",
-            group: "CONCENTRATIONS",
-            description: "Concentration view"
-        },
-        {
             key: "concentration_add",
             name: "Concentration Add",
             group: "CONCENTRATIONS",
@@ -222,6 +192,18 @@ module.exports = {
             name: "Concentration Delete",
             group: "CONCENTRATIONS",
             description: "Concentration delete"
+        },
+        {
+            key: "concentration_export",
+            name: "Concentration Export",
+            group: "CONCENTRATIONS",
+            description: "Concentration export"
+        },
+        {
+            key: "concentration_import",
+            name: "Concentration Import",
+            group: "CONCENTRATIONS",
+            description: "Concentration import"
         },
         {
             key: "favorite_view",
@@ -242,12 +224,6 @@ module.exports = {
             description: "Favorite delete"
         },
         {
-            key: "note_view",
-            name: "Note View",
-            group: "NOTES",
-            description: "Note view"
-        },
-        {
             key: "note_add",
             name: "Note Add",
             group: "NOTES",
@@ -266,40 +242,16 @@ module.exports = {
             description: "Note delete"
         },
         {
-            key: "perfume_view",
-            name: "Perfume View",
-            group: "PERFUMES",
-            description: "Perfume view"
+            key: "note_export",
+            name: "Note Export",
+            group: "NOTES",
+            description: "Note export"
         },
         {
-            key: "perfume_brands",
-            name: "Perfume Brands",
-            group: "PERFUMES",
-            description: "Perfume brands"
-        },
-        {
-            key: "perfume_info",
-            name: "Perfume Info",
-            group: "PERFUMES",
-            description: "Perfume info"
-        },
-        {
-            key: "perfume_detail",
-            name: "Perfume Detail",
-            group: "PERFUMES",
-            description: "Perfume detail"
-        },
-        {
-            key: "perfume_filter_notes",
-            name: "Perfume Filter Notes",
-            group: "PERFUMES",
-            description: "Perfume filtered by notes"
-        },
-        {
-            key: "perfume_filter",
-            name: "Perfume Filter",
-            group: "PERFUMES",
-            description: "Perfume filter"
+            key: "note_import",
+            name: "Note Import",
+            group: "NOTES",
+            description: "Note import"
         },
         {
             key: "perfume_add",
@@ -314,22 +266,10 @@ module.exports = {
             description: "Perfume update"
         },
         {
-            key: "perfume_delete",
-            name: "Perfume Delete",
+            key: "perfume_export",
+            name: "Perfume Export",
             group: "PERFUMES",
-            description: "Perfume delete"
-        },
-        {
-            key: "topic_view",
-            name: "Topic View",
-            group: "TOPICS",
-            description: "Topic view"
-        },
-        {
-            key: "topic_detail",
-            name: "Topic Detail",
-            group: "TOPICS",
-            description: "Topic detail"
+            description: "Perfume export"
         },
         {
             key: "topic_add",

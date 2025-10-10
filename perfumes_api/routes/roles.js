@@ -10,7 +10,7 @@ const Enum = require('../config/enum');
 
 const AuditLogs = require('../lib/AuditLogs');
 const logger = require("../lib/logger/LoggerClass");
-
+const emitter = require("../lib/Emitter");
 const role_privileges = require("../config/role_privileges"); 
 
 const auth = require("../lib/auth")();
@@ -35,12 +35,13 @@ router.get("/", auth.checkRoles("role_view"), async (req, res) => {
         res.json(Response.successResponse(roles));
     } catch (err) {
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post("/add", auth.checkRoles("role_add"), async (req, res) => {
     try {
+
         let body = req.body;
 
         if(!body.role_name) {
@@ -53,7 +54,7 @@ router.post("/add", auth.checkRoles("role_add"), async (req, res) => {
 
         let newRole = new Roles({
             role_name: body.role_name,
-            created_by: req.user?.id
+            created_by: req.user.id
         });
 
         const role = await newRole.save();
@@ -67,20 +68,22 @@ router.post("/add", auth.checkRoles("role_add"), async (req, res) => {
             await priv.save();
         }
 
-        AuditLogs.info(req.user?.email, "Roles", "Add", role);
-        logger.info(req.user?.email, "Roles", "Add", role);
+        AuditLogs.info(req.user.email, "Roles", "Add", role);
+        logger.info(req.user.email, "Roles", "Add", role);
+        emitter.getEmitter("notifications").emit("messages", {message: "role added."});
 
         res.json(Response.successResponse({success: true, data: role }));
 
     } catch (err) {
-        logger.error(req.user?.email, "Roles", "Add", err);
+        logger.error(req.user.email, "Roles", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post("/update", auth.checkRoles("role_update"), async (req, res) => {
     try {
+
         let body = req.body;
 
         if(!body._id) {
@@ -133,43 +136,53 @@ router.post("/update", auth.checkRoles("role_update"), async (req, res) => {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Role"]));
         }
 
-        AuditLogs.info(req.user?.email, "Roles", "Update", updated);
-        logger.info(req.user?.email, "Roles", "Update", updated);
+        AuditLogs.info(req.user.email, "Roles", "Update", updated);
+        logger.info(req.user.email, "Roles", "Update", updated);
+        emitter.getEmitter("notifications").emit("messages", {message: "role updated."});
 
         res.json(Response.successResponse({success: true, data: updated }));
 
     } catch (err) {
-        logger.error(req.user?.email, "Roles", "Update", err);
+        logger.error(req.user.email, "Roles", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.delete(`/:id`, auth.checkRoles("role_delete"), async (req, res) => {
     try {
-        const roleId = req.params.id.trim();
-        const deleted = await Roles.deleteOne({_id: roleId});
+        const roleId = req.params.id;
 
-        if(deleted.deletedCount === 0) {
+        const role = await Roles.findById(roleId);
+
+        if(!role) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Role"]));
         }
 
         await RolePrivileges.deleteMany({role_id: roleId});
 
-        AuditLogs.info(req.user?.email, "Roles", "Delete", deleted);
-        logger.info(req.user?.email, "Roles", "Delete", deleted);
+        await Roles.deleteOne({_id: roleId});
+
+        AuditLogs.info(req.user.email, "Roles", "Delete", role);
+        logger.info(req.user.email, "Roles", "Delete", role);
+        emitter.getEmitter("notifications").emit("messages", {message: "role deleted."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Roles", "Delete", err);
+        logger.error(req.user.email, "Roles", "Delete", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.get("/role_privileges", auth.checkRoles("role_privileges"), async (req, res) => {
     res.json(role_privileges);
 });
+
+router.get("role_privileges_key", auth.checkRoles("role_privileges"), async(req, res) => {
+    keys = role_privileges.privileges.map(rp => rp.key);
+    res.json(keys);
+})
 
 module.exports = router;

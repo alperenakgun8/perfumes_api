@@ -17,19 +17,21 @@ const Response = require('../lib/Response');
 const Enum = require('../config/enum');
 const logger = require("../lib/logger/LoggerClass");
 const config = require('../config');
+const emitter = require("../lib/Emitter");
 
 const auth = require("../lib/auth")();
 const I18n = require("../lib/i18n");
 const i18n = new I18n(config.DEFAULT_LANG);
 
-const multer = require("multer");
+const ExcelExport = require("../lib/Export");
+const fs = require("fs");
 
 const rateLimit = require('express-rate-limit');
 const MongoStore = require('rate-limit-mongo');
 
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 50, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	limit: 5, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
 	//standardHeaders: 'draft-8', // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
 	ipv6Subnet: 56, // Set to 60 or 64 to be less aggressive, or 52 or 48 to be more aggressive
@@ -40,6 +42,8 @@ const limiter = rateLimit({
     expireTimeMs: 15 * 60 * 1000
   }),
 });
+
+const multer = require("multer");
 
 const storage = multer.diskStorage({
   destination: (req, file, next) => {
@@ -78,18 +82,9 @@ router.post("/auth", limiter, async (req, res) => {
 
     let token = jwt.encode(payload, config.JWT.SECRET);
 
-    const roles = await UserRoles.find({user_id: user._id}).populate("role_id").select("role_name");
+    const roles = await UserRoles.find({user_id: user._id}).populate("role_id", "role_name").select("role_id");
 
-    // let role = "USER";
-
-    // for(let i = 0; i < roles.length; i++) {
-    //   if(roles[i].role_id.role_name === "SUPER_ADMIN") {
-    //     role = "SUPER_ADMIN";
-    //     break;
-    //   } else if (roles[i].role_id.role_name === "ADMIN") {
-    //     role = "ADMIN";
-    //   }
-    // }
+    const roleNames = roles.map(r => r.role_id.role_name);
  
     userData = {
       _id: user._id,
@@ -98,8 +93,12 @@ router.post("/auth", limiter, async (req, res) => {
       nickname: user.nickname,
       profile_picture: user.profile_picture,
       language: user.language,
-      role: roles
+      role: roleNames
     }
+
+    AuditLogs.info(email, "Users", "Auth", "authenticated");
+    logger.info(email, "Users", "Auth", "authenticated");
+    emitter.getEmitter("notifications").emit("messages", {message: "user authenticated."});
 
     res.json(Response.successResponse({token, user: userData}));
 
@@ -113,6 +112,7 @@ router.post('/add', async (req, res) => {
     try{
         let body = req.body;
         const lang = req.user?.language || config.DEFAULT_LANG;
+
         if(!body.email || body.email.length === 0) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["email"]));
         }
@@ -140,21 +140,11 @@ router.post('/add', async (req, res) => {
         if(!body.nickname || body.nickname.length === 0) {
           throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST",lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["nickname"]));
         }
-         
+
         let finded = await Users.find({email: body.email});
 
         if(finded.length > 0) {
             throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.ALREADY_EXIST", lang, [""]), i18n.translate("COMMON.ALREADY_EXIST", lang, ["User"]));
-        }
-
-        if(!body.roles || !Array.isArray(body.roles) || body.roles.length === 0 ) {
-          throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", lang), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", lang, ["roles"]));
-        }
-
-        let roles = await Roles.find({_id: {$in: body.roles}});
-
-        if(roles.length === 0) {
-          throw new CustomError(Enum.HTTP_CODES.CONFLICT, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", lang), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", lang, ["roles"]));
         }
 
         let hashedPassword = bcrypt.hashSync(body.password, bcrypt.genSaltSync(8), null);
@@ -170,35 +160,41 @@ router.post('/add', async (req, res) => {
 
         await user.save();
 
-        for(let i = 0; i < roles.length; i++) {
-          let userRole = new UserRoles({
-            user_id: user._id,
-            role_id: roles[i]._id
-          });
-          await userRole.save();
+        const defaultRole = await Roles.findOne({ role_name: "USER"});
+        
+        if (!defaultRole) {
+          await Users.deleteOne({_id: user._id});
+          throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND", lang, ["Role"]));
         }
 
-        AuditLogs.info(req.user?.email, "Users", "Add", user);
-        logger.info(req.user?.email, "Users", "Add", user);
+        let userRole = new UserRoles({
+          user_id: user._id,
+          role_id: defaultRole._id
+        });
+        await userRole.save();
+
+        AuditLogs.info(user.email, "Users", "Add", user);
+        logger.info(user.email, "Users", "Add", user);
+        emitter.getEmitter("notifications").emit("messages", {message: "user added."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
         logger.error(req.user?.email, "Users", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post('/register', async (req, res) => {
+    
+    let body = req.body;  
     try{
         const userExist = await Users.findOne({});
 
         if(userExist) {
           return res.sendStatus(Enum.HTTP_CODES.NOT_FOUND);
         }
-
-        let body = req.body;
         const lang = req.user?.language || config.DEFAULT_LANG;
 
         if(!body.email || body.email.length === 0) {
@@ -247,27 +243,29 @@ router.post('/register', async (req, res) => {
         });
         await user.save();
 
-        let role = new Roles({
-          role_name: "SUPER_ADMIN",
-          created_by: user._id
-        });
-        await role.save();
+        let firstRole = await Roles.findOne({role_name: "SUPER_ADMIN"});
+
+        if (!firstRole) {
+          await Users.deleteOne({_id: user._id});
+          throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND", lang, ["Role"]));
+        }
 
         let userRoles = new UserRoles({
-          role_id: role._id,
+          role_id: firstRole._id,
           user_id: user._id
         });
         await userRoles.save();
 
-        AuditLogs.info(req.user?.email, "Users", "Add", user);
-        logger.info(req.user?.email, "Users", "Add", user);
+        AuditLogs.info(user.email, "Users", "Register", user);
+        logger.info(user.email, "Users", "Register", user);
+        emitter.getEmitter("notifications").emit("messages", {message: "user registered."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Users", "Add", err);
+        logger.error(body.email, "Users", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
@@ -294,11 +292,10 @@ router.get('/', auth.checkRoles("user_view"), async (req, res) => {
 router.get('/profile_info', auth.checkRoles("user_get"), async (req, res) => {
   try{
 
-    let user = await Users.findOne({_id: req.user?._id});
-    const lang = req.user?.language || config.DEFAULT_LANG;
+    let user = await Users.findOne({_id: req.user._id});
 
     if(!user) {
-      return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", lang, ["User"])}));
+      return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"])}));
     }
 
     res.json(Response.successResponse(user));
@@ -311,21 +308,17 @@ router.get('/profile_info', auth.checkRoles("user_get"), async (req, res) => {
 
 router.post('/update', auth.checkRoles("user_update"), async (req, res) => {
     try{
+
         let body = req.body;
-        const lang = req.user?.language || config.DEFAULT_LANG;
 
-        if(!body._id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["_id"]));
-        }
+        let before = await Users.findById(req.user._id);
 
-        let user = await Users.findOne({_id: req.user?._id});
-
-        if(!user) {
-          throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND", lang, ["User"]));
+        if(!before) {
+          throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"]));
         }
 
         if(body.email) {
-          throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE,i18n.translate("COMMON.NOT_ACCEPTABLE", lang), i18n.translate("COMMON.NOT_MODIFIABLE", lang, ["email"]));
+          throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE,i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["email"]));
         }
 
         let updates = {};
@@ -346,9 +339,13 @@ router.post('/update', auth.checkRoles("user_update"), async (req, res) => {
           updates.language = body.language;
         }
 
-        if(body._id == req.user._id) {
-          // throw new CustomError(Enum.HTTP_CODES.FORBIDDEN, i18n.translate("COMMON.NEED_PERMISSIONS", lang), i18n.translate("COMMON.NEED_PERMISSIONS", lang));
+        if(body._id.toString() === req.user._id.toString()) {
           body.roles = null;
+          body.is_active = null;
+        }
+
+        if(body.is_active) {
+          updates.is_active = body.is_active;
         }
 
         if(body.roles && Array.isArray(body.roles) && body.roles.length > 0 ) {
@@ -374,47 +371,45 @@ router.post('/update', auth.checkRoles("user_update"), async (req, res) => {
 
         const updated = await Users.findByIdAndUpdate(req.user._id, updates, {new: true});
 
-        AuditLogs.info(req.user?.email, "Users", "Update", updated);
-        logger.info(req.user?.email, "Users", "Update", updated);
+        AuditLogs.info(updated.email, "Users", "Update", {before: before, after: updated});
+        logger.info(updated.email, "Users", "Update", {before: before, after: updated});
+        emitter.getEmitter("notifications").emit("messages", {message: "user updated."});
 
         res.json(Response.successResponse({success: true, data: updated}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Users", "Update", err);
+        logger.error(req.user.email, "Users", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post('/update_password', auth.checkRoles("user_update_password"), async (req, res) => {
   try{
-    const{ old_password, new_password } = req.body;
-    const lang = req.user?.language || config.DEFAULT_LANG;
 
-    // if(!user_id) {
-    //   throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["user_id"]));
-    // }
+    const{ old_password, new_password } = req.body;
+    
     if(!old_password) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["old_password"]));
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["old_password"]));
     }
     if(!new_password){
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["new_password"]));
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["new_password"]));
     }
 
-    const user = await Users.findById(req.user?._id).select("+password");
+    const user = await Users.findById(req.user._id).select("+password");
     if (!user) {
-      return res.json(Response.successResponse({ success: false, message: i18n.translate("COMMON.NOT_FOUND", lang, ["User"]) }));
+      return res.json(Response.successResponse({ success: false, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"]) }));
     }
 
     bcrypt.compare(old_password, user.password, async (err, result) => {
       if (err) throw err;
 
       if(!result) {
-        return res.json(Response.successResponse({success: false, message: i18n.translate("USER.OLD_PASSWORD_WRONG", lang)}));
+        return res.json(Response.successResponse({success: false, message: i18n.translate("USER.OLD_PASSWORD_WRONG", req.user.language)}));
       }
 
        if(new_password.length < Enum.MIN_PASSWORD_LENGTH || new_password.length > Enum.MAX_PASSWORD_LENGTH) {
-      return res.json(Response.successResponse({ success: false, message: i18n.translate("USER.PASSWORD_LENGTH", lang)}));
+      return res.json(Response.successResponse({ success: false, message: i18n.translate("USER.PASSWORD_LENGTH", req.user.language)}));
     }
 
     let hashedNewPassword = bcrypt.hashSync(new_password, bcrypt.genSaltSync(8), null);
@@ -422,53 +417,53 @@ router.post('/update_password', auth.checkRoles("user_update_password"), async (
     user.password = hashedNewPassword
     await user.save();
 
-    const safeUser = user.toObject();
-    delete safeUser.password;
+    user = await user.select("-password");
 
-    AuditLogs.info(user.email, "Users", "PasswordChange", safeUser);
-    logger.info(req.user?.email, "Users", "PasswordChange", safeUser);
+    AuditLogs.info(user.email, "Users", "Password Change", "password changed");
+    logger.info(user.email, "Users", "Password Change", "password changed");
 
     return res.json(Response.successResponse({ success: true, message: "Password updated successfully"}));
     });
 
   } catch (err) {
-    logger.error(req.user?.email, "Users", "PasswordChange", err);
+    logger.error(req.user.email, "Users", "Password Change", err);
     const errorResponse = Response.errorResponse(err);
-    res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+    res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
   }
 });
 
 router.delete('/:id', auth.checkRoles("user_delete"), async (req, res) => {
     try{
-        const userId = req.params.id; 
-        const deleted = await Users.deleteOne({_id: userId});
-        const lang = req.user?.language || config.DEFAULT_LANG;
 
-        if(deleted.deletedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", lang, ["User"]));
+        const userId = req.params.id;
+        const user = await Users.findById(userId); 
+
+        if(!user) {
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["User"]));
         }
+
+        await Users.deleteOne({_id: userId});
 
         await UserRoles.deleteMany({ user_id: userId });
 
-        AuditLogs.info(req.user?.email, "Users", "Delete", deleted);
-        logger.info(req.user?.email, "Users", "Delete", deleted);
+        AuditLogs.info(req.user.email, "Users", "Delete", user);
+        logger.info(req.user.email, "Users", "Delete", user);
+        emitter.getEmitter("notifications").emit("messages", {message: "user deleted."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Users", "Delete", err);
+        logger.error(req.user.email, "Users", "Delete", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post("/upload_profile_picture", auth.checkRoles("user_update_profile_picture"), upload, async(req, res) => {
   try {
 
-    const lang = req.user?.language || config.DEFAULT_LANG;
-
     if(!req.file) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", lang), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", lang, ["file"]));
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["file"]));
     }
     
     const imagePath = `/uploads/${req.file.filename}`;
@@ -480,58 +475,47 @@ router.post("/upload_profile_picture", auth.checkRoles("user_update_profile_pict
     );
 
     if(!user) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND", lang, ["User"]));
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"]));
     }
 
-    AuditLogs.info(req.user?.email, "Users", "UploadProfilePicture", imagePath);
-    logger.info(req.user?.email, "Users", "UploadProfilePicture", imagePath);
+    AuditLogs.info(req.user.email, "Users", "Upload Profile Picture", imagePath);
+    logger.info(req.user.email, "Users", "Upload Profile Picture", imagePath);
 
-    res.json(Response.successResponse({ success: true, message: "Profile picture updated", data: user }));
+    res.json(Response.successResponse({ success: true, data: user }));
 
   } catch (err) {
-    logger.error(req.user?.email, "Users", "UploadProfilePicture", err);
+    logger.error(req.user.email, "Users", "UploadProfilePicture", err);
     let errorResponse = Response.errorResponse(err);
-    res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+    res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
   }
 });
 
+router.get("/export", auth.checkRoles("user_export"), async (req, res) => {
+    try{
+        let users = await Users.find({});
+
+        let excelTable = ExcelExport.toExcel(
+        ["EMAIL", "FIRST_NAME", "LAST_NAME", "NICKNAME", "LANGUAGE", "IS_ACTIVE", "CREATED_AT", "PROFILE_PICTURE"],
+        ["email", "first_name", "last_name", "nickname", "language", "is_active", "created_at", "profile_picture"],
+        users
+        );
+
+        let filePath = path.join(__dirname, "../tmp", `users_excel_${Date.now()}.xlsx`);
+        
+        fs.writeFileSync(filePath, excelTable, "UTF-8");
+        res.download(filePath, () => {
+            fs.unlinkSync(filePath);
+        });
+
+        AuditLogs.info(req.user.email, "Users", "Export Excel", "exported");
+        logger.info(req.user.email, "Users", "Export Excel", "exported");
+        emitter.getEmitter("notifications").emit("messages", {message: "user exported."});
+
+    } catch (err) {
+        logger.error(req.user.email, "Users", "Export Excel", err);
+        let errorResponse = Response.errorResponse(err);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+    }
+});
+
 module.exports = router;
-
-// router.post("/login", async (req, res) => {
-//   const {email, password} = req.body;
-//   try{
-//     if(!email) {
-//       throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "email field must be filled");
-//     }
-//     if(!password){
-//       throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, Enum.VALIDATION_ERROR, "password field must be filled");
-//     }
-
-//     const user = await Users.findOne({email: email}).select("+password");
-//     if(!user){
-//       return res.json(Response.successResponse({success: false, message: "User with email not found"}));
-//     }
-
-//     bcrypt.compare(password, user.password, (err, result) => {
-//       if(err) throw err;
-
-//       if(!result) {
-//         return res.json(Response.successResponse({success: false, message: "invalid password"}));
-//       }
-
-//       const { password: pwd, ...userObj } = user.toObject();
-//       const isAdmin = user.role === "Admin";
-//       const isSuperAdmin = user.role === "Super Admin";
-
-//       AuditLogs.info(req.user?.email, "Users", "Login", user);
-//       logger.info(req.user?.email, "Users", "Login", user);
-
-//       res.json(Response.successResponse({success: true, data: {user: userObj, is_admin: isAdmin, is_super_admin: isSuperAdmin,  success: true}}));
-//     });
-
-//   } catch (err) {
-//     logger.error(req.user?.email, "Users", "Login", err);
-//     const errorResponse = Response.errorResponse(err);
-//     res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
-//   }
-// });

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
+const emitter = require("../lib/Emitter");
 const Comments = require('../db/models/Comments');
 const AuditLogs = require('../lib/AuditLogs');
 const CustomError = require('../lib/Error');
@@ -21,8 +22,9 @@ router.get('/perfume/:id', async (req, res) => {
         if(comments.length === 0) {
             return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", lang, ["perfume_comments"])}, lang));
         }
-
+        
         res.json(Response.successResponse(comments));
+        
     } catch(err) {
         let errorResponse = Response.errorResponse(err);
         res.status(errorResponse.code).json(errorResponse);
@@ -59,8 +61,11 @@ router.get('/user', auth.checkRoles("comment_view_user"), async (req, res) => {
 });
 
 router.post('/add', auth.checkRoles("comment_add"), async (req, res) => {
-    let body = req.body;
+    
     try{
+
+        let body = req.body;
+
         if(!body.perfume_id) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["perfume_id"]));
         }
@@ -84,21 +89,25 @@ router.post('/add', auth.checkRoles("comment_add"), async (req, res) => {
 
         const addedComment = await comment.populate("user_id");
 
-        AuditLogs.info(req.user?.email, "Comments", "Add", comment);
-        logger.info(req.user?.email, "Comments", "Add", comment);
+        AuditLogs.info(req.user.email, "Comments", "Add", comment);
+        logger.info(req.user.email, "Comments", "Add", comment);
+        emitter.getEmitter("notifications").emit("messages", {message: "comment added."});
 
         res.json(Response.successResponse({success: true, data: addedComment}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Comments", "Add", err);
+        logger.error(req.user.email, "Comments", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.post('/update', auth.checkRoles("comment_update"),async (req, res) => {
-    let body = req.body;
+    
     try{
+
+        let body = req.body;
+
         if(!body._id) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
@@ -118,44 +127,52 @@ router.post('/update', auth.checkRoles("comment_update"),async (req, res) => {
             updates.rating = body.rating; 
         }
 
-        const updated = await Comments.updateOne({_id: body._id}, updates);
+        const before = await Comments.findById(body._id);
 
-        if(updated.matchedCount === 0) {
+        if(!before) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["comment"]));
         }
 
-        AuditLogs.info(req.user?.email, "Comments", "Update", updated);
-        logger.info(req.user?.email, "Comments", "Update", updated);
+        const updated = await Comments.findByIdAndUpdate(body._id, updates, { new: true });
 
-        const updatedComment = await updated.populate("user_id");
+        AuditLogs.info(req.user.email, "Comments", "Update", {before: before, after: updated});
+        logger.info(req.user.email, "Comments", "Update", {before: before, after: updated});
+        emitter.getEmitter("notifications").emit("messages", {message: "comment updated."});
+
+        updatedComment = await updated.populate("user_id")
 
         res.json(Response.successResponse({success: true, data: updatedComment}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Comments", "Update", err);
+        logger.error(req.user.email, "Comments", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.delete('/:id', auth.checkRoles("comment_delete"),async (req, res) => {
     try{
-        let commentId = req.params.id;
-        const deleted = await Comments.deleteOne({_id: commentId});
 
-        if(deleted.deletedCount === 0) {
+        let commentId = req.params.id;
+
+        const comment = Comments.findById(commentId);
+
+        if(!comment) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["comment"]));
         }
 
-        AuditLogs.info(req.user?.email, "Comments", "Delete", deleted);
-        logger.info(req.user?.email, "Comments", "Delete", deleted);
+        await Comments.deleteOne({_id: commentId});
+
+        AuditLogs.info(req.user.email, "Comments", "Delete", comment);
+        logger.info(req.user.email, "Comments", "Delete", comment);
+        emitter.getEmitter("notifications").emit("messages", {message: "comment deleted."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Comments", "Update", err);
+        logger.error(req.user.email, "Comments", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 

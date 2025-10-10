@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
+const emitter = require("../lib/Emitter");
 const Topics = require("../db/models/Topics");
 const AuditLogs = require('../lib/AuditLogs');
 const CustomError = require('../lib/Error');
@@ -43,9 +44,6 @@ router.all("*", auth.authenticate(), (req, res, next) => {
 router.post("/add", auth.checkRoles("topic_add"), async(req, res) => {
     let body = req.body;
     try {
-        if(!body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["user_id"]));
-        }
         if(!body.title) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["title_id"]));
         }
@@ -54,23 +52,24 @@ router.post("/add", auth.checkRoles("topic_add"), async(req, res) => {
         }
 
         let topic = new Topics({
-            user_id: body.user_id,
+            user_id: req.user.email,
             title: body.title,
             content: body.content
         });
 
         await topic.save();
 
-        AuditLogs.info(req.user?.eamil, "Topics", "Add", topic);
-        logger.info(req.user?.email, "Topics", "Add", topic);
+        AuditLogs.info(req.user.eamil, "Topics", "Add", topic);
+        logger.info(req.user.email, "Topics", "Add", topic);
+        emitter.getEmitter("notifications").emit("messages", {message: topic.name + "named topic added."});
 
         const addedTopic = await topic.populate("user_id");
 
         res.json(Response.successResponse({success: true, data: addedTopic}));
     } catch (err) {
-        logger.error(req.user?.email, "Topics", "Add", err);
+        logger.error(req.user.email, "Topics", "Add", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
@@ -81,11 +80,14 @@ router.post("/update", auth.checkRoles("topic_update"), async(req, res) => {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
         }
 
+        const before = await Topics.findById(body._id);
+
+        if(!before) {
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Topic"]));
+        }
+
         let updates = {};
 
-        if(body.user_id) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_ACCEPTABLE, i18n.translate("COMMON.NOT_ACCEPTABLE", req.user.language), i18n.translate("COMMON.NOT_MODIFIABLE", req.user.language, ["user_id"]));
-        }
         if(body.title) {
             updates.title = body.title;
         }
@@ -93,43 +95,44 @@ router.post("/update", auth.checkRoles("topic_update"), async(req, res) => {
             updates.content = body.content;
         }
 
-       const updated = await Topics.updateOne({_id: body._id}, updates);
+       const updated = await Topics.findByIdAndUpdate({_id: body._id}, updates, { new: true });
 
-       if(updated.matchedCount === 0) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Topic"]));
-        }
-        
+        AuditLogs.info(req.user.email, "Topics", "Update", {before: before, after: updated});
+        logger.info(req.user.email, "Topics", "Update", {before: before, after: updated});
+        emitter.getEmitter("notifications").emit("messages", {message: topic.name + "named topic updated."});
+
         const updatedTopic = await Topics.findByIdAndUpdate(body._id, updates, {new: true}).populate("user_id");
-
-        AuditLogs.info(req.user?.email, "Topics", "Update", updated);
-        logger.info(req.user?.email, "Topics", "Update", updated);
 
         res.json(Response.successResponse({success: true, data: updatedTopic}));
     } catch (err) {
-        logger.error(req.user?.email, "Topics", "Update", err);
+        logger.error(req.user.email, "Topics", "Update", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 
 router.delete('/:id', auth.checkRoles("topic_delete"), async (req, res) => {
     try{
         let topicId = req.params.id;
-        const deleted = await Topics.deleteOne({_id: topicId});
 
-        if(deleted.deletedCount === 0) {
+        const topic = await Topics.findById(topicId);
+
+        if(!topic) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Topic"]));
         }
 
-        AuditLogs.info(req.user?.email, "Topics", "Update", deleted);
-        logger.info(req.user?.email, "Topics", "Update", deleted);
+        await Topics.deleteOne({_id: topicId});
+
+        AuditLogs.info(req.user.email, "Topics", "Update", topic);
+        logger.info(req.user.email, "Topics", "Update", topic);
+        emitter.getEmitter("notifications").emit("messages", {message: topic.name + "named topic deleted."});
 
         res.json(Response.successResponse({success: true}));
 
     } catch (err) {
-        logger.error(req.user?.email, "Topics", "Delete", err);
+        logger.error(req.user.email, "Topics", "Delete", err);
         let errorResponse = Response.errorResponse(err);
-        res.status(err.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
+        res.status(errorResponse.code || Enum.HTTP_CODES.INT_SERVER_ERROR).json(errorResponse);
     }
 });
 

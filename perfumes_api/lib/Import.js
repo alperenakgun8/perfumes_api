@@ -1,6 +1,7 @@
 const xlsx = require("node-xlsx");
 const CustomError = require("./Error");
 const Enum = require("../config/enum");
+const config = require('../config');
 const I18n = require("./i18n");
 const i18n = new I18n(config.DEFAULT_LANG);
 
@@ -23,3 +24,5 @@ class Import {
         return rows;
     }
 }
+
+module.exports = new Import();

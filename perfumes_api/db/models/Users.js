@@ -12,7 +12,8 @@ const schema = mongoose.Schema({
     last_name: {type: String, required: true},
     nickname: {type: String, required: true},
     profile_picture: { type: String , default: ""},
-    language: {type: String, default: DEFAULT_LANG}
+    language: {type: String, default: DEFAULT_LANG},
+    is_active: {type: Boolean, default: true}
 }, {
     versionKey: false,
     timestamps: {

@@ -26,4 +26,4 @@ class Export {
     }
 }
 
-module.exports = Export;
+module.exports = new Export();

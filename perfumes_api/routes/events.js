@@ -2,10 +2,15 @@ const express = require('express');
 const Enum = require('../config/enum');
 const router = express.Router();
 const emitter = require("../lib/Emitter");
+const auth = require('../lib/auth')();
 
 emitter.addEmitter("notifications");
 
-router.get("/", async (req, res) => {
+router.all("*", auth.authenticate(), (req, res, next) => {
+    next();
+});
+
+router.get("/", auth.checkRoles("auditlogs_view"), async (req, res) => {
 
     res.writeHead(Enum.HTTP_CODES.OK, {
         "Content-Type": "text/event-stream",
