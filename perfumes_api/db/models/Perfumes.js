@@ -5,7 +5,7 @@ const schema = mongoose.Schema({
     description: {type: String, required: true},
     concentration_id: {type: mongoose.Schema.Types.ObjectId, ref:"concentrations", required: true, unique: false},
     brand: {type: String, required: true},
-    gender: {type: String, required: true, enum: ["F", "M", "U"]},
+    gender: {type: String, required: true, enum: ["Kadın", "Erkek", "Unisex"]},
     image_url: {type: String, required: true},
     created_by: {type: mongoose.Schema.Types.ObjectId, ref: "users"}
 }, {

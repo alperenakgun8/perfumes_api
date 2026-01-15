@@ -23,7 +23,7 @@ const multer = require("multer");
 
 const storage = multer.diskStorage({
   destination: (req, file, next) => {
-    next(null, config.FILE_UPLOAD_PATH);
+    next(null, config.EXCEL_TMP_PATH);
   },
   filename: (req, file, next) => {
     next(null, file.fieldname + "_" + Date.now() + path.extname(file.originalname));
@@ -131,7 +131,7 @@ router.delete('/:id',  auth.checkRoles("concentration_delete"), async (req,res) 
     try{
         const concentrationId = req.params.id;
 
-        const comment = Concentrations.findById(concentrationId);
+        const comment = await Concentrations.findById(concentrationId);
 
         if(!comment) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Concentration"]));
@@ -169,7 +169,7 @@ router.get("/export", /*auth.checkRoles("concentration_export"),*/ async (req, r
         formattedData
         );
 
-        let filePath = path.join(__dirname, "../tmp", `concentrations_excel_${Date.now()}.xlsx`);
+        let filePath = path.join(config.EXCEL_TMP_PATH, `concentrations_excel_${Date.now()}.xlsx`);
         
         fs.writeFileSync(filePath, excelTable, "UTF-8");
         res.download(filePath, () => {

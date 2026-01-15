@@ -147,7 +147,7 @@ router.delete('/:id', auth.checkRoles("comment_of_topic_delete"), async (req, re
 
         let commentId = req.params.id;
 
-        const comment = CommentsOfTopics.findById(commentId);
+        const comment = await CommentsOfTopics.findById(commentId);
 
         if(!comment) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["comment"]));

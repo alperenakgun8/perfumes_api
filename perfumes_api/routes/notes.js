@@ -23,7 +23,7 @@ const multer = require("multer");
 
 const storage = multer.diskStorage({
   destination: (req, file, next) => {
-    next(null, config.FILE_UPLOAD_PATH);
+    next(null, config.EXCEL_TMP_PATH);
   },
   filename: (req, file, next) => {
     next(null, file.fieldname + "_" + Date.now() + path.extname(file.originalname));
@@ -135,11 +135,11 @@ router.delete('/:id', auth.checkRoles("note_delete"), async (req, res) => {
 
         const note = await Notes.findById(noteId);
 
-        if(note) {
+        if(!note) {
             throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND_OR_ALREADY_DELETED", req.user.language, ["Note"]));
         }
 
-        await Notes.deleteOne({_id: notesId});
+        await Notes.deleteOne({_id: noteId});
 
         AuditLogs.info(req.user.email, "Notes", "Delete", note);
         logger.info(req.user.email, "Notes", "Delete", note);
@@ -171,7 +171,7 @@ router.get("/export", auth.checkRoles("note_export"), async (req, res) => {
         formattedData
         );
 
-        let filePath = path.join(__dirname, "../tmp", `notes_excel_${Date.now()}.xlsx`);
+        let filePath = path.join(config.EXCEL_TMP_PATH, `notes_excel_${Date.now()}.xlsx`);
         
         fs.writeFileSync(filePath, excelTable, "UTF-8");
         res.download(filePath, () => {

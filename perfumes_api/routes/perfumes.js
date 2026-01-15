@@ -50,19 +50,20 @@ router.get('/general_info', async (req,res) => {
     }
 });
 
-
 router.get('/detail/:id', async (req, res) => {
     try{
         const perfumeId = req.params.id;
 
+        const lang = req.user?.language || config.DEFAULT_LANG;
+
         if(!mongoose.Types.ObjectId.isValid(perfumeId)) {
-            return res.status(Enum.HTTP_CODES.BAD_REQUEST).json(Response.errorResponse({code: Enum.HTTP_CODES.BAD_REQUEST, message: i18n.translate("COMMON.INVALID", req.user.language, ["perfume_id"])}));
+            return res.status(Enum.HTTP_CODES.BAD_REQUEST).json(Response.errorResponse({code: Enum.HTTP_CODES.BAD_REQUEST, message: i18n.translate("COMMON.INVALID", lang, ["perfume_id"])}));
         }
 
         let perfume = await Perfumes.findById(perfumeId).populate('concentration_id', 'name display_name');
 
         if(!perfume) {
-            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Perfume"])}));
+            return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", lang, ["Perfume"])}));
         }
 
         let notes = await PerfumeNotes.find({perfume_id: perfumeId}).populate('note_id', 'name image_url').select('note_type note_id');
@@ -88,11 +89,13 @@ router.post('/filter_by_notes', async (req, res) => {
 
     const { noteIds } = req.body;
 
+    const lang = req.user?.language || config.DEFAULT_LANG;
+
     if (!noteIds || !Array.isArray(noteIds) || noteIds.length === 0) {
-      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", req.user.language, ["noteIds"]));
+      throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", lang), i18n.translate("COMMON.MUST_BE_NON_EMPTY_ARRAY", lang, ["noteIds"]));
     }
 
-    const objectIds = noteIds.map(id => mongoose.Types.ObjectId(id));
+    const objectIds = noteIds.map(id => new mongoose.Types.ObjectId(String(id)));
 
     const perfumes = await PerfumeNotes.aggregate([
       {
@@ -191,8 +194,8 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
         if(!body.gender) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["gender"]));
         }
-        if(body.gender !== "F" || body.gender !== "M" || body.gender !== "U") {
-            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE", req.user.language, ["gender", "F | M | U"]));
+        if(body.gender !== "Kadın" && body.gender && "Erkek" && body.gender !== "Unisex") {
+            throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE", req.user.language, ["gender", "Kadın | Erkek | Unisex"]));
         }
         if(!body.image_url) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["image_url"]));
@@ -387,7 +390,7 @@ router.get("/export", auth.checkRoles("perfume_export"), async (req, res) => {
         formattedData
         );
 
-        let filePath = path.join(__dirname, "../tmp", `perfumes_excel_${Date.now()}.xlsx`);
+        let filePath = path.join(config.EXCEL_TMP_PATH, `perfumes_excel_${Date.now()}.xlsx`);
         
         fs.writeFileSync(filePath, excelTable, "UTF-8");
         res.download(filePath, () => {

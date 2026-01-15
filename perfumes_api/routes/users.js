@@ -31,7 +31,7 @@ const MongoStore = require('rate-limit-mongo');
 
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 5, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
 	//standardHeaders: 'draft-8', // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
 	ipv6Subnet: 56, // Set to 60 or 64 to be less aggressive, or 52 or 48 to be more aggressive
@@ -82,18 +82,19 @@ router.post("/auth", limiter, async (req, res) => {
 
     let token = jwt.encode(payload, config.JWT.SECRET);
 
-    const roles = await UserRoles.find({user_id: user._id}).populate("role_id", "role_name").select("role_id");
+    const role = await UserRoles.findOne({user_id: user._id}).populate("role_id", "role_name").select("role_id");
 
-    const roleNames = roles.map(r => r.role_id.role_name);
+    const roleName = role.role_id.role_name;
  
     userData = {
       _id: user._id,
+      email,
       first_name: user.first_name,
       last_name: user.last_name,
       nickname: user.nickname,
       profile_picture: user.profile_picture,
       language: user.language,
-      role: roleNames
+      role: roleName
     }
 
     AuditLogs.info(email, "Users", "Auth", "authenticated");
@@ -273,7 +274,36 @@ router.all("*", auth.authenticate(), (req, res, next) => {
     next();
 });
 
-router.get('/', auth.checkRoles("user_view"), async (req, res) => {
+router.get("/auth/me", async (req,res) => {
+  try {
+    const user = await Users.findById(req.user._id);
+    if(!user) {
+      return res.status(Enum.HTTP_CODES.NOT_FOUND).json(Response.errorResponse({code: Enum.HTTP_CODES.NOT_FOUND, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"])}));
+    }
+
+    const role = await UserRoles.findOne({user_id: user._id}).populate("role_id", "role_name").select("role_id");
+
+    const roleName = role.role_id.role_name;
+ 
+    userData = {
+      _id: user._id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      nickname: user.nickname,
+      profile_picture: user.profile_picture,
+      language: user.language,
+      role: roleName
+    }
+
+    res.json(Response.successResponse(userData));
+  } catch (err) {
+    let errorResponse = Response.errorResponse(err);
+    res.status(errorResponse.code).json(errorResponse);
+  }
+}); 
+
+router.get('/', /*auth.checkRoles("user_view"),*/ async (req, res) => {
     try{
         let users = await Users.find({}).lean();
 
@@ -396,7 +426,7 @@ router.post('/update_password', auth.checkRoles("user_update_password"), async (
       throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["new_password"]));
     }
 
-    const user = await Users.findById(req.user._id).select("+password");
+    let user = await Users.findById(req.user._id).select("+password");
     if (!user) {
       return res.json(Response.successResponse({ success: false, message: i18n.translate("COMMON.NOT_FOUND", req.user.language, ["User"]) }));
     }
@@ -417,7 +447,8 @@ router.post('/update_password', auth.checkRoles("user_update_password"), async (
     user.password = hashedNewPassword
     await user.save();
 
-    user = await user.select("-password");
+    user = user.toObject();
+    delete user.password;
 
     AuditLogs.info(user.email, "Users", "Password Change", "password changed");
     logger.info(user.email, "Users", "Password Change", "password changed");
@@ -500,7 +531,7 @@ router.get("/export", auth.checkRoles("user_export"), async (req, res) => {
         users
         );
 
-        let filePath = path.join(__dirname, "../tmp", `users_excel_${Date.now()}.xlsx`);
+        let filePath = path.join(config.EXCEL_TMP_PATH, `users_excel_${Date.now()}.xlsx`);
         
         fs.writeFileSync(filePath, excelTable, "UTF-8");
         res.download(filePath, () => {

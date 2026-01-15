@@ -5,6 +5,7 @@ require("dotenv").config();
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 const cors = require('cors');
+const auth = require("./lib/auth")();
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -29,6 +30,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 //public uploads file
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// passport auth starting
+app.use(auth.initialize());
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);

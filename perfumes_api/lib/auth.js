@@ -22,17 +22,17 @@ module.exports = function() {
 
                 let rolePrivileges = await RolePrivileges.find({ role_id: {$in: userRoles.map(ur => ur.role_id)}});
 
-                let privileges = rolePrivileges.map(rp => privs.privileges.find(p => p.key === rp.permission))/*.filter(Boolean)*/;
+                let privileges = rolePrivileges.map(rp => privs.privileges.find(p => p.key === rp.permission)).filter(Boolean);
 
             done(null, {
-                id: user._id,
+                _id: user._id,
                 email: user.email,
                 first_name: user.first_name,
                 last_name: user.last_name,
                 nickname: user.nickname,
                 roles: privileges,
                 language: user.language,
-                exp: parseInt(Date.now() / 1000) * config.JWT.EXPIRE_TIME
+                exp: parseInt(Date.now() / 1000) + config.JWT.EXPIRE_TIME
             });
             } else {
                 done(new Error("User not found"), null);
@@ -65,7 +65,7 @@ module.exports = function() {
                 }
 
                 return next();
-
+                
             }
         }
     }

@@ -27,8 +27,9 @@ router.get("/:id", async (req, res) => {
     try {
         const id = req.params.id
         let topic = await Topics.findOne({_id: id}).populate("user_id");
+        const lang = req.user?.language || config.DEFAULT_LANG;
         if(!topic) {
-            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", req.user.language, [""]), i18n.translate("COMMON.NOT_FOUND", req.user.language, ["Topic"]));
+            throw new CustomError(Enum.HTTP_CODES.NOT_FOUND, i18n.translate("COMMON.NOT_FOUND", lang, [""]), i18n.translate("COMMON.NOT_FOUND", lang, ["Topic"]));
         }
         res.json(Response.successResponse(topic));
     } catch (err) {
@@ -52,7 +53,7 @@ router.post("/add", auth.checkRoles("topic_add"), async(req, res) => {
         }
 
         let topic = new Topics({
-            user_id: req.user.email,
+            user_id: req.user._id,
             title: body.title,
             content: body.content
         });

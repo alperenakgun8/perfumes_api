@@ -16,7 +16,7 @@ router.get("/count/:id", async (req, res) => {
   try {
     const perfumeId = req.params.id;
     const count = await UserFavorites.countDocuments({ perfume_id: perfumeId });
-    res.json(Response.successResponse({count}));;
+    res.json(Response.successResponse(count));
   } catch (err) {
     let errorResponse = Response.errorResponse(err);
     res.status(errorResponse.code).json(errorResponse);
@@ -31,9 +31,9 @@ router.get('/', auth.checkRoles("favorite_view"), async (req, res) => {
   try {
     let favorites = await UserFavorites.find({ user_id: req.user._id }).populate("perfume_id", "_id brand name image_url");
 
-    const perfumes = favorites.map(fav => fav.perfume_id);
+    const perfumes = favorites.map(fav => fav.perfume_id).filter(Boolean);
 
-    res.json(Response.successResponse({perfumes}));
+    res.json(Response.successResponse(perfumes));
   } catch (err) {
     let errorResponse = Response.errorResponse(err);
     res.status(errorResponse.code).json(errorResponse);
@@ -68,7 +68,7 @@ router.post('/add', auth.checkRoles("favorite_add"),async (req, res) => {
 
     const populated = await favorite.populate("perfume_id", "_id name brand image_url");
 
-    res.json(Response.successResponse({success: true, data: populated}));
+    res.json(Response.successResponse({success: true, data: populated.perfume_id}));
 
   } catch (err) {
     logger.error(req.user.email, "Favorites", "Add", err);
@@ -88,8 +88,8 @@ router.post('/delete', auth.checkRoles("favorite_delete"), async (req, res) => {
 
     await UserFavorites.deleteOne({_id: favorite._id});
 
-    AuditLogs.info(req.user.email, "Favorites", "Delete", deleted);
-    logger.info(req.user.email, "Favorites", "Delete", deleted);
+    AuditLogs.info(req.user.email, "Favorites", "Delete", favorite);
+    logger.info(req.user.email, "Favorites", "Delete", favorite);
 
     res.json(Response.successResponse({success: true}));
 

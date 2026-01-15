@@ -260,6 +260,12 @@ module.exports = {
             description: "Perfume add"
         },
         {
+            key: "perfume_delete",
+            name: "Perfume Delete",
+            group: "PERFUMES",
+            description: "Perfume delete"
+        },
+        {
             key: "perfume_update",
             name: "Perfume Update",
             group: "PERFUMES",
