@@ -16,9 +16,19 @@ var app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
+const allowedOrigins = ['http://localhost:5173',
+  'https://kokunubul.onrender.com'];
+
 // CORS middleware
 app.use(cors({
-  origin: 'http://localhost:5173', // frontend port
+  origin: function (origin, callback) {
+    if(!origin) return callback(null, true);
+    if(allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
