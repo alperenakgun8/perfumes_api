@@ -194,7 +194,7 @@ router.post('/add', auth.checkRoles("perfume_add"), async (req, res) => {
         if(!body.gender) {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["gender"]));
         }
-        if(body.gender !== "Kadın" && body.gender && "Erkek" && body.gender !== "Unisex") {
+        if(body.gender !== "Kadın" || body.gender !== "Erkek" || body.gender !== "Unisex") {
             throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.BAD_REQUEST", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE", req.user.language, ["gender", "Kadın | Erkek | Unisex"]));
         }
         if(!body.image_url) {
